@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auto AI Code Review — Architecture Guide</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:#04050a; --card:#0a0c18; --hover:#12152e;
+      --green:#22c55e; --lime:#84cc16; --cyan:#06b6d4; --blue:#3b82f6;
+      --purple:#a855f7; --red:#ef4444; --amber:#f59e0b;
+      --text:#dfe1f0; --text2:#7580a5; --dim:#3a3f5c; --border:#141830;
+    }
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-height:1.7;overflow-x:hidden}
+    .mono{font-family:'Fira Code',monospace}
+
+    /* Hero */
+    .hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:2rem;position:relative;overflow:hidden}
+    .hero::before{content:'';position:absolute;width:550px;height:550px;background:radial-gradient(circle,rgba(34,197,94,.08) 0%,transparent 70%);top:-200px;left:-100px;animation:dr 10s ease-in-out infinite}
+    .hero::after{content:'';position:absolute;width:450px;height:450px;background:radial-gradient(circle,rgba(168,85,247,.07) 0%,transparent 70%);bottom:-180px;right:-80px;animation:dr 12s ease-in-out infinite reverse}
+    @keyframes dr{0%,100%{transform:translate(0,0)}50%{transform:translate(30px,-25px)}}
+
+    .badge{display:inline-block;padding:5px 14px;border:1px solid var(--green);border-radius:50px;font-size:.66rem;letter-spacing:3px;text-transform:uppercase;color:var(--green);margin-bottom:1.8rem;z-index:1;position:relative}
+    .hero h1{font-size:clamp(2rem,5vw,4rem);font-weight:900;line-height:1.08;margin-bottom:1rem;z-index:1;position:relative}
+    .hero h1 .c1{color:var(--green)} .hero h1 .c2{color:var(--purple)}
+    .hero p{font-size:1.02rem;color:var(--text2);max-width:600px;margin-bottom:2rem;z-index:1;position:relative}
+
+    section{max-width:1050px;margin:0 auto;padding:5rem 2rem}
+    .sn{font-family:'Fira Code',monospace;font-size:.68rem;color:var(--green);letter-spacing:4px;text-transform:uppercase;margin-bottom:.35rem}
+    .st{font-size:clamp(1.4rem,3.2vw,2.3rem);font-weight:700;margin-bottom:.65rem}
+    .ss{color:var(--text2);font-size:.95rem;max-width:650px;margin-bottom:2rem}
+
+    /* Flow Diagram */
+    .flow{display:flex;flex-direction:column;gap:0;max-width:700px;margin:0 auto}
+    .fstep{display:flex;align-items:flex-start;gap:16px;padding:1.1rem 0;opacity:0;transform:translateY(10px);animation:fu .4s ease forwards}
+    .fstep:nth-child(1){animation-delay:.05s}.fstep:nth-child(2){animation-delay:.1s}.fstep:nth-child(3){animation-delay:.15s}.fstep:nth-child(4){animation-delay:.2s}.fstep:nth-child(5){animation-delay:.25s}.fstep:nth-child(6){animation-delay:.3s}
+    @keyframes fu{to{opacity:1;transform:translateY(0)}}
+    .fline{display:flex;flex-direction:column;align-items:center;min-width:40px}
+    .fdot{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Fira Code',monospace;font-size:.72rem;font-weight:600;flex-shrink:0}
+    .fdot.gh{background:rgba(34,197,94,.1);color:var(--green);border:2px solid var(--green)}
+    .fdot.sv{background:rgba(6,182,212,.1);color:var(--cyan);border:2px solid var(--cyan)}
+    .fdot.ai{background:rgba(168,85,247,.1);color:var(--purple);border:2px solid var(--purple)}
+    .fdot.bk{background:rgba(59,130,246,.1);color:var(--blue);border:2px solid var(--blue)}
+    .fwire{width:2px;min-height:12px;flex-grow:1;background:var(--border)}
+    .fbody h3{font-size:.95rem;font-weight:600;margin-bottom:2px}
+    .fbody p{color:var(--text2);font-size:.85rem}
+    .tag{display:inline-block;padding:2px 7px;border-radius:4px;font-size:.65rem;font-family:'Fira Code',monospace;margin-top:3px;margin-right:3px}
+    .tag.gh{background:rgba(34,197,94,.08);color:var(--green)}
+    .tag.api{background:rgba(6,182,212,.08);color:var(--cyan)}
+    .tag.gem{background:rgba(168,85,247,.08);color:var(--purple)}
+    .tag.sec{background:rgba(239,68,68,.08);color:var(--red)}
+
+    /* Cards */
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-top:1.5rem}
+    .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.3rem;margin-top:1.5rem}
+    @media(max-width:700px){.grid2,.grid3{grid-template-columns:1fr}}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:1.5rem;transition:all .3s;position:relative;overflow:hidden}
+    .card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+    .card.g::before{background:linear-gradient(90deg,var(--green),transparent)}
+    .card.p::before{background:linear-gradient(90deg,var(--purple),transparent)}
+    .card.c::before{background:linear-gradient(90deg,var(--cyan),transparent)}
+    .card.r::before{background:linear-gradient(90deg,var(--red),transparent)}
+    .card:hover{border-color:var(--dim);transform:translateY(-2px)}
+    .card h3{font-size:1rem;margin-bottom:.15rem}
+    .card .lb{font-size:.65rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.6rem}
+    .card.g .lb{color:var(--green)}.card.p .lb{color:var(--purple)}.card.c .lb{color:var(--cyan)}.card.r .lb{color:var(--red)}
+    .card ul{list-style:none;display:flex;flex-direction:column;gap:4px}
+    .card li{color:var(--text2);font-size:.82rem;padding-left:13px;position:relative}
+    .card li::before{content:'›';position:absolute;left:0;font-weight:700}
+    .card.g li::before{color:var(--green)}.card.p li::before{color:var(--purple)}.card.c li::before{color:var(--cyan)}.card.r li::before{color:var(--red)}
+
+    /* Code */
+    .cb{background:#060710;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.2rem 0}
+    .cb .h{display:flex;align-items:center;justify-content:space-between;padding:7px 13px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.01)}
+    .cb .l{font-family:'Fira Code',monospace;font-size:.64rem;color:var(--green);letter-spacing:1px}
+    .cb .f{font-family:'Fira Code',monospace;font-size:.64rem;color:var(--dim)}
+    .cb pre{padding:11px 15px;font-family:'Fira Code',monospace;font-size:.72rem;line-height:1.75;color:var(--text2);overflow-x:auto}
+    .kw{color:var(--purple)}.fn{color:var(--amber)}.str{color:var(--green)}.cmt{color:var(--dim);font-style:italic}.num{color:var(--cyan)}
+
+    /* Table */
+    .rt{width:100%;border-collapse:collapse;margin-top:1.1rem}
+    .rt th{text-align:left;padding:8px 11px;font-size:.65rem;text-transform:uppercase;letter-spacing:2px;color:var(--dim);border-bottom:1px solid var(--border)}
+    .rt td{padding:8px 11px;border-bottom:1px solid rgba(20,24,48,.5);font-size:.83rem}
+    .rt tr:hover td{background:rgba(255,255,255,.01)}
+    .mb{display:inline-block;padding:2px 7px;border-radius:4px;font-family:'Fira Code',monospace;font-size:.65rem;font-weight:700}
+    .mb.post{background:rgba(34,197,94,.08);color:var(--green)}.mb.get{background:rgba(6,182,212,.08);color:var(--cyan)}.mb.patch{background:rgba(245,158,11,.08);color:var(--amber)}.mb.del{background:rgba(239,68,68,.08);color:var(--red)}
+    .rp{font-family:'Fira Code',monospace;font-size:.75rem;color:var(--text)}
+    .rd{color:var(--text2)}
+    .rw{font-size:.6rem;padding:1px 6px;border-radius:3px;background:rgba(34,197,94,.1);color:var(--green);margin-left:5px}
+
+    /* Comparison timeline */
+    .timeline{display:flex;flex-direction:column;gap:1.2rem;margin-top:2rem;padding-left:20px;border-left:2px solid var(--border)}
+    .tentry{position:relative;padding-left:20px}
+    .tentry::before{content:'';position:absolute;left:-26px;top:6px;width:10px;height:10px;border-radius:50%;border:2px solid var(--green);background:var(--bg)}
+    .tentry h4{font-size:.9rem;font-weight:600;margin-bottom:2px}
+    .tentry p{color:var(--text2);font-size:.82rem}
+    .tentry .proj{font-family:'Fira Code',monospace;font-size:.65rem;color:var(--dim);letter-spacing:1px}
+
+    footer{text-align:center;padding:3rem 2rem;color:var(--dim);font-size:.78rem;border-top:1px solid var(--border)}
+  </style>
+</head>
+<body>
+
+  <div class="hero">
+    <span class="badge mono">Project 5 — Capstone Architecture Guide</span>
+    <h1>Auto AI <span class="c1">Code Review</span><br><span class="c2">Engine</span></h1>
+    <p>GitHub webhook fires → your API catches it → fetches the PR diff → Gemini reviews for bugs, security, and style → posts review comments directly on the Pull Request. Event-driven AI with external API integration.</p>
+  </div>
+
+  <!-- SECTION 1: WEBHOOKS -->
+  <section>
+    <div class="sn mono">01 — Core Concept</div>
+    <h2 class="st">Webhooks — Event-Driven Architecture</h2>
+    <p class="ss">In Projects 1-4, users sent requests to your API. Here, GITHUB sends requests to your API. Your server listens and reacts when events happen in the outside world.</p>
+
+    <div class="grid2">
+      <div class="card g">
+        <div class="lb mono">Projects 1-4 — Request-Driven</div>
+        <h3>User initiates everything</h3>
+        <ul>
+          <li>User sends POST request</li>
+          <li>API processes immediately</li>
+          <li>API responds to the user</li>
+          <li>Predictable, synchronous flow</li>
+        </ul>
+      </div>
+      <div class="card p">
+        <div class="lb mono">Project 5 — Event-Driven</div>
+        <h3>GitHub initiates the flow</h3>
+        <ul>
+          <li>Someone opens a PR on GitHub</li>
+          <li>GitHub POSTs to YOUR webhook URL</li>
+          <li>You respond in &lt;10 seconds</li>
+          <li>Review runs in the background</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="cb">
+      <div class="h"><span class="l">PARADIGM SHIFT</span><span class="f">Who calls whom?</span></div>
+      <div style="padding:14px 16px;">
+<pre><span class="cmt">// Projects 1-4: YOUR users call YOUR API</span>
+User → <span class="fn">POST</span> <span class="str">/api/jds</span> → Your API → Gemini → Response to User
+
+<span class="cmt">// Project 5: GITHUB calls YOUR API</span>
+Developer opens PR → GitHub → <span class="fn">POST</span> <span class="str">/api/webhooks/github</span> → Your API → Gemini → GitHub PR Comments
+
+<span class="cmt">// Your API is a MIDDLEMAN between GitHub and Gemini:</span>
+GitHub  →  Your API  →  Gemini
+GitHub  ←  Your API  ←  Gemini</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 2: HMAC VERIFICATION -->
+  <section>
+    <div class="sn mono">02 — Security Pattern</div>
+    <h2 class="st">HMAC Signature Verification</h2>
+    <p class="ss">When someone POSTs to your webhook URL, how do you know it's GitHub and not an attacker? Answer: cryptographic signature verification using a shared secret.</p>
+
+    <div class="flow">
+      <div class="fstep">
+        <div class="fline"><div class="fdot gh">1</div><div class="fwire"></div></div>
+        <div class="fbody"><h3>You set a secret on GitHub</h3><p>When configuring the webhook, you enter a secret string. Both you and GitHub know it.</p><span class="tag sec">shared secret</span></div>
+      </div>
+      <div class="fstep">
+        <div class="fline"><div class="fdot gh">2</div><div class="fwire"></div></div>
+        <div class="fbody"><h3>GitHub signs the payload</h3><p>GitHub creates an HMAC-SHA256 hash of the request body using the secret. Sends it in X-Hub-Signature-256 header.</p><span class="tag gh">HMAC-SHA256</span></div>
+      </div>
+      <div class="fstep">
+        <div class="fline"><div class="fdot sv">3</div><div class="fwire"></div></div>
+        <div class="fbody"><h3>Your server recreates the hash</h3><p>You hash the received body with the same secret. If your hash matches GitHub's hash → it's legitimate.</p><span class="tag api">timingSafeEqual</span></div>
+      </div>
+      <div class="fstep">
+        <div class="fline"><div class="fdot sv">4</div></div>
+        <div class="fbody"><h3>Match → process. No match → reject.</h3><p>Uses timingSafeEqual (not ===) to prevent timing attacks that leak info about which characters matched.</p><span class="tag sec">constant-time comparison</span></div>
+      </div>
+    </div>
+
+    <div class="cb">
+      <div class="h"><span class="l">SAME PATTERN EVERYWHERE</span><span class="f">Not just GitHub</span></div>
+      <div style="padding:14px 16px;">
+<pre><span class="cmt">// Every webhook provider uses this pattern:</span>
+Stripe   → <span class="str">Stripe-Signature</span> header
+GitHub   → <span class="str">X-Hub-Signature-256</span> header
+Slack    → <span class="str">X-Slack-Signature</span> header
+Twilio   → <span class="str">X-Twilio-Signature</span> header
+
+<span class="cmt">// Learn it once → use it everywhere</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 3: EXTERNAL API -->
+  <section>
+    <div class="sn mono">03 — New Pattern</div>
+    <h2 class="st">External API Integration</h2>
+    <p class="ss">Your API doesn't just receive data and process it. It actively calls GitHub's API to fetch PR diffs and post review comments. Your server is both a consumer and producer of external APIs.</p>
+
+    <div class="grid3">
+      <div class="card c">
+        <div class="lb mono">Read from GitHub</div>
+        <h3>Fetch PR Diff</h3>
+        <ul>
+          <li>GET /repos/:owner/:repo/pulls/:number</li>
+          <li>Accept: application/vnd.github.v3.diff</li>
+          <li>Returns unified diff format</li>
+        </ul>
+      </div>
+      <div class="card p">
+        <div class="lb mono">AI Analysis</div>
+        <h3>Gemini Review</h3>
+        <ul>
+          <li>Send diff + review rules</li>
+          <li>Get structured comments JSON</li>
+          <li>Severity + category + suggestion</li>
+        </ul>
+      </div>
+      <div class="card g">
+        <div class="lb mono">Write to GitHub</div>
+        <h3>Post Comments</h3>
+        <ul>
+          <li>POST summary comment on PR</li>
+          <li>POST inline comments on code lines</li>
+          <li>Formatted with markdown + emoji</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 4: BACKGROUND PROCESSING -->
+  <section>
+    <div class="sn mono">04 — Production Pattern</div>
+    <h2 class="st">Fire and Forget</h2>
+    <p class="ss">GitHub expects a response within 10 seconds. But AI review takes 15-30 seconds. Solution: respond immediately, run the review in the background.</p>
+
+    <div class="cb">
+      <div class="h"><span class="l">BACKGROUND PROCESSING</span><span class="f">webhook.service.ts</span></div>
+      <div style="padding:14px 16px;">
+<pre><span class="cmt">// ❌ BAD: GitHub times out waiting</span>
+<span class="kw">const</span> review = <span class="kw">await</span> <span class="fn">reviewPR</span>(payload);  <span class="cmt">// Takes 20+ seconds</span>
+res.<span class="fn">json</span>(review);  <span class="cmt">// GitHub already gave up</span>
+
+<span class="cmt">// ✅ GOOD: Respond immediately, review in background</span>
+<span class="fn">reviewPR</span>(payload).<span class="fn">catch</span>(err => console.<span class="fn">error</span>(err));
+res.<span class="fn">json</span>({ action: <span class="str">"review_triggered"</span> });  <span class="cmt">// Instant response</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 5: API ROUTES -->
+  <section>
+    <div class="sn mono">05 — API Endpoints</div>
+    <h2 class="st">Route Architecture</h2>
+
+    <table class="rt">
+      <thead><tr><th>Method</th><th>Endpoint</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><span class="mb post">POST</span></td><td class="rp mono">/api/auth/register</td><td class="rd">Create account</td></tr>
+        <tr><td><span class="mb post">POST</span></td><td class="rp mono">/api/auth/login</td><td class="rd">Login → JWT</td></tr>
+        <tr><td><span class="mb post">POST</span></td><td class="rp mono">/api/webhooks/github</td><td class="rd">GitHub webhook endpoint <span class="rw">HMAC</span></td></tr>
+        <tr><td><span class="mb post">POST</span></td><td class="rp mono">/api/webhooks/repos</td><td class="rd">Register a repo for review</td></tr>
+        <tr><td><span class="mb get">GET</span></td><td class="rp mono">/api/webhooks/repos</td><td class="rd">List registered repos</td></tr>
+        <tr><td><span class="mb patch">PATCH</span></td><td class="rp mono">/api/webhooks/repos/:id</td><td class="rd">Update repo rules</td></tr>
+        <tr><td><span class="mb del">DEL</span></td><td class="rp mono">/api/webhooks/repos/:id</td><td class="rd">Delete repo</td></tr>
+        <tr><td><span class="mb get">GET</span></td><td class="rp mono">/api/reviews</td><td class="rd">List all reviews</td></tr>
+        <tr><td><span class="mb get">GET</span></td><td class="rp mono">/api/reviews/:id</td><td class="rd">Full review details</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 6: LEARNING JOURNEY -->
+  <section>
+    <div class="sn mono">06 — The Complete Journey</div>
+    <h2 class="st">5-Project Learning Path</h2>
+    <p class="ss">Each project built on the last. Here's the full progression from zero to production-grade AI backend systems.</p>
+
+    <div class="timeline">
+      <div class="tentry"><div class="proj">PROJECT 1</div><h4>AI Resume Analyzer</h4><p>RAG pipeline, embeddings, vector databases, single AI call</p></div>
+      <div class="tentry"><div class="proj">PROJECT 2</div><h4>AI Chatbot with Memory</h4><p>Streaming (SSE), dual memory system, conversation management</p></div>
+      <div class="tentry"><div class="proj">PROJECT 3</div><h4>AI Competency Builder</h4><p>Prompt chaining (2-step), public shareable routes, PDF → AI → AI</p></div>
+      <div class="tentry"><div class="proj">PROJECT 4</div><h4>AI Sales Call Analyzer</h4><p>Audio processing, multi-provider architecture, 4-step chain</p></div>
+      <div class="tentry"><div class="proj">PROJECT 5</div><h4>Auto AI Code Review</h4><p>Webhooks, HMAC verification, external API integration, event-driven, background processing</p></div>
+    </div>
+  </section>
+
+  <footer>
+    <p><strong>Fzee-Tech</strong> — Auto AI Code Review Architecture Guide (Capstone)<br>
+    <span style="font-size:.74rem">Powered by Google Gemini · GitHub API · TypeScript · MongoDB · Webhooks</span></p>
+  </footer>
+</body>
+</html>
