@@ -104,13 +104,13 @@ docker-compose up
 
 ## Environment Variables
 
-| Variable | Description |
-|---|---|
-| `GEMINI_API_KEY` | Google Gemini API key |
-| `GITHUB_TOKEN` | GitHub Personal Access Token (needs `repo` scope) |
-| `GITHUB_WEBHOOK_SECRET` | Secret used when configuring GitHub webhook |
-| `MONGODB_URI` | MongoDB connection string |
-| `JWT_SECRET` | JWT signing secret |
+| Variable                | Description                                       |
+|-------------------------|---------------------------------------------------|
+| `GEMINI_API_KEY`        | Google Gemini API key                             |
+| `GITHUB_TOKEN`          | GitHub Personal Access Token (needs `repo` scope) |
+| `GITHUB_WEBHOOK_SECRET` | Secret used when configuring GitHub webhook        |
+| `MONGODB_URI`           | MongoDB connection string                         |
+| `JWT_SECRET`            | JWT signing secret                                |
 
 ## Project Structure
 

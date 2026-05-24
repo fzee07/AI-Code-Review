@@ -38,7 +38,7 @@ const startServer = async () => {
     console.log(`
     ╔══════════════════════════════════════════════╗
     ║   Auto AI Code Review API                    ║
-    ║   Running on: http://localhost:${PORT}            ║
+    ║   Running on: http://localhost:${PORT}          ║
     ║   AI: Google Gemini (only)                   ║
     ║   Webhook: /api/webhooks/github              ║
     ╚══════════════════════════════════════════════╝
