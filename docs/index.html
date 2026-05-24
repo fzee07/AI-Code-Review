@@ -1,0 +1,1448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodeInspector — AI Code Review Engine</title>
+  <meta name="description" content="An editorial-grade automated code review system. GitHub webhooks meet Gemini AI — your personal senior engineer.">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* ═══════════════════════════════════════════════════
+       DESIGN SYSTEM — "The Code Inspector's Desk"
+       Editorial + Brutalist + Developer Workbench
+    ═══════════════════════════════════════════════════ */
+    :root {
+      --ink: #1a1a1a;
+      --cream: #f5f0e8;
+      --parchment: #ebe4d4;
+      --burnt-orange: #c4552d;
+      --forest: #2d6a4f;
+      --deep-blue: #264653;
+      --amber: #e9c46a;
+      --faded-ink: #6b6b6b;
+      --rule: #c9bea8;
+      --code-bg: #1e1e1e;
+      --code-text: #d4d4d4;
+      --red-wash: #f8e8e4;
+      --green-wash: #e4f0e8;
+      --blue-wash: #e4ecf0;
+      --amber-wash: #f5f0dc;
+      --serif: 'Playfair Display', Georgia, serif;
+      --sans: 'IBM Plex Sans', -apple-system, sans-serif;
+      --mono: 'IBM Plex Mono', 'Fira Code', monospace;
+      --ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--cream);
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.65;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── UTILITY ─────────────────────────────── */
+    .hidden { display: none !important; }
+    .container { max-width: 1140px; margin: 0 auto; padding: 0 2rem; }
+    .mono { font-family: var(--mono); }
+    .serif { font-family: var(--serif); }
+    .text-faded { color: var(--faded-ink); }
+    .text-center { text-align: center; }
+    .mt-1 { margin-top: 0.5rem; } .mt-2 { margin-top: 1rem; } .mt-3 { margin-top: 2rem; } .mt-4 { margin-top: 3rem; }
+    .mb-1 { margin-bottom: 0.5rem; } .mb-2 { margin-bottom: 1rem; } .mb-3 { margin-bottom: 2rem; }
+
+    /* ── TYPOGRAPHY ──────────────────────────── */
+    h1, h2, h3, h4 { font-family: var(--serif); font-weight: 700; line-height: 1.15; color: var(--ink); }
+    h1 { font-size: clamp(2.5rem, 6vw, 5rem); letter-spacing: -0.03em; }
+    h2 { font-size: clamp(1.8rem, 3.5vw, 2.8rem); letter-spacing: -0.02em; }
+    h3 { font-size: clamp(1.2rem, 2vw, 1.6rem); }
+    h4 { font-size: 1.1rem; font-family: var(--sans); font-weight: 600; }
+    p { color: var(--faded-ink); font-size: 1rem; max-width: 65ch; }
+    a { color: var(--deep-blue); text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.2s; }
+    a:hover { border-bottom-color: var(--deep-blue); }
+
+    /* ── SECTION LABEL ───────────────────────── */
+    .section-label {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: var(--burnt-orange);
+      margin-bottom: 0.4rem;
+      display: block;
+    }
+
+    /* ── RULE DIVIDER ────────────────────────── */
+    .rule { border: none; border-top: 1px solid var(--rule); margin: 3rem 0; }
+    .rule-thick { border: none; border-top: 3px solid var(--ink); margin: 2rem 0; }
+
+    /* ── STAMP BADGE ─────────────────────────── */
+    .stamp {
+      display: inline-block;
+      padding: 3px 10px;
+      border: 2px solid currentColor;
+      border-radius: 3px;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      transform: rotate(-2deg);
+      position: relative;
+      line-height: 1.4;
+    }
+    .stamp::after {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border: 1px solid currentColor;
+      border-radius: 4px;
+      opacity: 0.3;
+    }
+    .stamp-critical { color: var(--burnt-orange); background: var(--red-wash); }
+    .stamp-warning { color: var(--deep-blue); background: var(--blue-wash); }
+    .stamp-suggestion { color: #8b6914; background: var(--amber-wash); }
+    .stamp-praise { color: var(--forest); background: var(--green-wash); }
+    .stamp-pending { color: var(--faded-ink); background: #f0f0f0; }
+    .stamp-reviewing { color: var(--deep-blue); background: var(--blue-wash); }
+    .stamp-completed { color: var(--forest); background: var(--green-wash); }
+    .stamp-failed { color: var(--burnt-orange); background: var(--red-wash); }
+
+    .stamp-press { animation: stampPress 0.4s var(--ease) forwards; }
+    @keyframes stampPress {
+      0% { transform: rotate(-2deg) scale(1.5); opacity: 0; }
+      60% { transform: rotate(-2deg) scale(0.95); opacity: 1; }
+      100% { transform: rotate(-2deg) scale(1); opacity: 1; }
+    }
+
+    /* ── BUTTONS ──────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 28px;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      border: 2px solid var(--ink);
+      background: var(--ink);
+      color: var(--cream);
+      cursor: pointer;
+      transition: all 0.25s var(--ease);
+      position: relative;
+      overflow: hidden;
+    }
+    .btn:hover { background: transparent; color: var(--ink); border-bottom: 2px solid var(--ink); }
+    .btn-outline { background: transparent; color: var(--ink); }
+    .btn-outline:hover { background: var(--ink); color: var(--cream); }
+    .btn-danger { border-color: var(--burnt-orange); color: var(--burnt-orange); background: transparent; }
+    .btn-danger:hover { background: var(--burnt-orange); color: var(--cream); }
+    .btn-sm { padding: 6px 16px; font-size: 0.68rem; }
+
+    /* ── FORM INPUTS ─────────────────────────── */
+    .form-group { margin-bottom: 1.5rem; }
+    .form-group label {
+      display: block;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--faded-ink);
+      margin-bottom: 0.4rem;
+    }
+    .form-input {
+      width: 100%;
+      padding: 12px 16px;
+      font-family: var(--sans);
+      font-size: 0.95rem;
+      color: var(--ink);
+      background: var(--cream);
+      border: 1px solid var(--rule);
+      border-bottom: 2px solid var(--ink);
+      outline: none;
+      transition: all 0.2s;
+    }
+    .form-input:focus { border-bottom-color: var(--burnt-orange); background: #fff; }
+    .form-input::placeholder { color: var(--rule); font-style: italic; }
+
+    /* ── CARDS ────────────────────────────────── */
+    .card {
+      background: var(--parchment);
+      border: 1px solid var(--rule);
+      padding: 1.8rem;
+      position: relative;
+      transition: transform 0.2s var(--ease), box-shadow 0.2s;
+    }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1rem;
+      padding-bottom: 0.8rem;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    /* ── LEDGER TABLE ────────────────────────── */
+    .ledger {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    .ledger thead th {
+      text-align: left;
+      padding: 10px 14px;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--faded-ink);
+      border-bottom: 2px solid var(--ink);
+    }
+    .ledger tbody tr {
+      border-bottom: 1px solid var(--rule);
+      transition: background 0.15s;
+      cursor: pointer;
+    }
+    .ledger tbody tr:hover { background: rgba(201,190,168,0.25); }
+    .ledger tbody tr:nth-child(even) { background: rgba(235,228,212,0.4); }
+    .ledger tbody tr:nth-child(even):hover { background: rgba(201,190,168,0.35); }
+    .ledger td { padding: 12px 14px; vertical-align: middle; }
+    .ledger .score-cell { font-family: var(--mono); font-weight: 600; font-size: 1.1rem; }
+    .ledger .date-cell { font-family: var(--mono); font-size: 0.78rem; color: var(--faded-ink); }
+
+    /* ── STAT BLOCK ──────────────────────────── */
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2rem; }
+    .stat-block {
+      background: var(--parchment);
+      border: 1px solid var(--rule);
+      padding: 1.5rem;
+      text-align: center;
+      position: relative;
+    }
+    .stat-block::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+    }
+    .stat-block.orange::before { background: var(--burnt-orange); }
+    .stat-block.green::before { background: var(--forest); }
+    .stat-block.blue::before { background: var(--deep-blue); }
+    .stat-block.amber::before { background: var(--amber); }
+    .stat-number {
+      font-family: var(--serif);
+      font-size: 2.4rem;
+      font-weight: 900;
+      line-height: 1;
+      margin-bottom: 0.3rem;
+    }
+    .stat-label {
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--faded-ink);
+    }
+
+    /* ── TICKER TAPE ─────────────────────────── */
+    .ticker-wrap {
+      background: var(--ink);
+      color: var(--cream);
+      overflow: hidden;
+      padding: 8px 0;
+      position: relative;
+    }
+    .ticker-content {
+      display: flex;
+      gap: 3rem;
+      animation: tickerScroll 30s linear infinite;
+      white-space: nowrap;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      letter-spacing: 1px;
+    }
+    .ticker-content span { display: inline-flex; align-items: center; gap: 6px; }
+    .ticker-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+    .ticker-dot.green { background: #4ade80; }
+    .ticker-dot.orange { background: #fb923c; }
+    .ticker-dot.blue { background: #60a5fa; }
+    @keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+
+    /* ── ANALOG GAUGE ────────────────────────── */
+    .gauge-wrap { width: 200px; height: 120px; position: relative; margin: 0 auto; }
+    .gauge-bg {
+      width: 200px; height: 100px;
+      border-radius: 100px 100px 0 0;
+      border: 8px solid var(--rule);
+      border-bottom: none;
+      position: relative;
+      overflow: hidden;
+    }
+    .gauge-fill {
+      position: absolute;
+      bottom: 0; left: 0;
+      width: 200px; height: 100px;
+      border-radius: 100px 100px 0 0;
+      background: conic-gradient(from 0.75turn, var(--burnt-orange) 0%, var(--amber) 40%, var(--forest) 70%, var(--forest) 100%);
+      transform-origin: bottom center;
+      clip-path: polygon(0 100%, 100% 100%, 100% 0, 0 0);
+    }
+    .gauge-needle {
+      position: absolute;
+      bottom: 0; left: 50%;
+      width: 3px; height: 80px;
+      background: var(--ink);
+      transform-origin: bottom center;
+      transform: translateX(-50%) rotate(-90deg);
+      transition: transform 1.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+      border-radius: 2px;
+      z-index: 2;
+    }
+    .gauge-center {
+      position: absolute;
+      bottom: -6px; left: 50%;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: var(--ink);
+      transform: translateX(-50%);
+      z-index: 3;
+    }
+    .gauge-value {
+      text-align: center;
+      font-family: var(--serif);
+      font-size: 2rem;
+      font-weight: 900;
+      margin-top: 8px;
+    }
+    .gauge-label {
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--faded-ink);
+    }
+
+    /* ── CODE BLOCK ──────────────────────────── */
+    .code-pane {
+      background: var(--code-bg);
+      border-radius: 6px;
+      overflow: hidden;
+      margin: 1rem 0;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+    }
+    .code-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 14px;
+      background: rgba(255,255,255,0.04);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .code-header .filename { color: var(--amber); font-size: 0.75rem; }
+    .code-header .filemeta { color: #666; font-size: 0.65rem; }
+    .code-line {
+      display: flex;
+      padding: 0 14px;
+      line-height: 1.75;
+      color: var(--code-text);
+    }
+    .code-line:hover { background: rgba(255,255,255,0.03); }
+    .code-linenum {
+      width: 45px;
+      text-align: right;
+      padding-right: 14px;
+      color: #555;
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .code-line.added { background: rgba(45,106,79,0.15); }
+    .code-line.added .code-linenum { color: var(--forest); }
+    .code-line.removed { background: rgba(196,85,45,0.15); }
+    .code-line.removed .code-linenum { color: var(--burnt-orange); }
+    .code-annotation {
+      background: rgba(233,196,106,0.08);
+      border-left: 3px solid var(--amber);
+      padding: 10px 14px;
+      margin: 2px 0;
+      font-size: 0.78rem;
+    }
+    .code-annotation .ann-severity { font-weight: 600; margin-right: 6px; }
+
+    /* ── REVIEW COMMENT CARD ─────────────────── */
+    .review-comment {
+      border: 1px solid var(--rule);
+      padding: 1.2rem 1.5rem;
+      margin-bottom: 0.8rem;
+      background: var(--parchment);
+      border-left: 4px solid var(--rule);
+      transition: transform 0.15s;
+    }
+    .review-comment:hover { transform: translateX(3px); }
+    .review-comment.severity-critical { border-left-color: var(--burnt-orange); }
+    .review-comment.severity-warning { border-left-color: var(--deep-blue); }
+    .review-comment.severity-suggestion { border-left-color: var(--amber); }
+    .review-comment.severity-praise { border-left-color: var(--forest); }
+    .review-comment .rc-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 0.5rem;
+    }
+    .review-comment .rc-file { font-family: var(--mono); font-size: 0.78rem; color: var(--deep-blue); }
+    .review-comment .rc-line { font-family: var(--mono); font-size: 0.7rem; color: var(--faded-ink); }
+    .review-comment .rc-message { font-size: 0.9rem; color: var(--ink); }
+    .review-comment .rc-suggestion {
+      margin-top: 0.6rem;
+      padding: 8px 12px;
+      background: rgba(45,106,79,0.06);
+      border-left: 2px solid var(--forest);
+      font-size: 0.82rem;
+      color: var(--forest);
+    }
+    .review-comment .rc-suggestion::before { content: '💡 '; }
+
+    /* ── TOGGLE SWITCH ───────────────────────── */
+    .toggle { position: relative; width: 44px; height: 24px; cursor: pointer; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; inset: 0;
+      background: var(--rule);
+      border-radius: 24px;
+      transition: 0.25s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 18px; height: 18px;
+      left: 3px; bottom: 3px;
+      background: var(--cream);
+      border-radius: 50%;
+      transition: 0.25s;
+    }
+    .toggle input:checked + .toggle-slider { background: var(--forest); }
+    .toggle input:checked + .toggle-slider::before { transform: translateX(20px); }
+
+    /* ── NAV ──────────────────────────────────── */
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 2rem;
+      border-bottom: 1px solid var(--rule);
+      background: var(--cream);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .topbar-brand {
+      font-family: var(--serif);
+      font-size: 1.3rem;
+      font-weight: 900;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      border-bottom: none;
+    }
+    .topbar-brand:hover { border-bottom: none; }
+    .brand-mark {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px; height: 32px;
+      background: var(--ink);
+      color: var(--cream);
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+    .topbar-nav { display: flex; gap: 1.5rem; align-items: center; }
+    .topbar-nav a {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--faded-ink);
+      transition: color 0.2s;
+      padding: 4px 0;
+      border-bottom: 2px solid transparent;
+    }
+    .topbar-nav a:hover, .topbar-nav a.active { color: var(--ink); border-bottom-color: var(--burnt-orange); }
+
+    /* ── MODAL ────────────────────────────────── */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(26,26,26,0.5);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 200;
+      backdrop-filter: blur(4px);
+    }
+    .modal-box {
+      background: var(--cream);
+      border: 1px solid var(--rule);
+      padding: 2.5rem;
+      max-width: 480px;
+      width: 90%;
+      position: relative;
+      animation: modalIn 0.3s var(--ease);
+    }
+    @keyframes modalIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .modal-close {
+      position: absolute;
+      top: 1rem; right: 1rem;
+      background: none; border: none;
+      font-size: 1.5rem; cursor: pointer;
+      color: var(--faded-ink);
+      line-height: 1;
+    }
+
+    /* ── SKELETON LOADING ────────────────────── */
+    .skeleton {
+      background: linear-gradient(90deg, var(--parchment) 25%, var(--cream) 50%, var(--parchment) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 3px;
+    }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    /* ── TOAST ────────────────────────────────── */
+    .toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 300; display: flex; flex-direction: column; gap: 0.5rem; }
+    .toast {
+      padding: 12px 20px;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      border: 1px solid var(--rule);
+      background: var(--cream);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      animation: toastIn 0.3s var(--ease);
+      max-width: 360px;
+    }
+    .toast.success { border-left: 4px solid var(--forest); }
+    .toast.error { border-left: 4px solid var(--burnt-orange); }
+    @keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+
+    /* ── PAGE TRANSITIONS ────────────────────── */
+    .page { animation: pageIn 0.35s var(--ease); }
+    @keyframes pageIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* ── RESPONSIVE ──────────────────────────── */
+    @media (max-width: 768px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .topbar { padding: 0.8rem 1rem; }
+      .topbar-nav { gap: 0.8rem; }
+      .topbar-nav a { font-size: 0.62rem; letter-spacing: 1px; }
+      .container { padding: 0 1rem; }
+      h1 { font-size: 2.2rem; }
+      .ledger { font-size: 0.8rem; }
+      .ledger td, .ledger th { padding: 8px; }
+    }
+    @media (max-width: 480px) {
+      .stats-grid { grid-template-columns: 1fr; }
+      .topbar-nav { display: none; }
+    }
+
+    /* ── FOOTER ───────────────────────────────── */
+    .site-footer {
+      border-top: 1px solid var(--rule);
+      padding: 2rem;
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--faded-ink);
+      letter-spacing: 1px;
+    }
+
+    /* ── HERO SPECIFIC ────────────────────────── */
+    .hero {
+      min-height: 92vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 4rem 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -100px; right: -100px;
+      width: 500px; height: 500px;
+      border: 1px solid var(--rule);
+      border-radius: 50%;
+      opacity: 0.3;
+    }
+    .hero::after {
+      content: '';
+      position: absolute;
+      bottom: -200px; left: -150px;
+      width: 600px; height: 600px;
+      border: 1px solid var(--rule);
+      border-radius: 50%;
+      opacity: 0.2;
+    }
+    .hero-overline {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      color: var(--burnt-orange);
+      margin-bottom: 1.5rem;
+    }
+    .hero h1 em {
+      font-style: italic;
+      color: var(--burnt-orange);
+    }
+    .hero-desc {
+      font-size: 1.15rem;
+      color: var(--faded-ink);
+      margin: 1.5rem 0 2.5rem;
+      max-width: 550px;
+      line-height: 1.7;
+    }
+    .hero-actions { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .hero-features {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2rem;
+      margin-top: 5rem;
+      position: relative;
+      z-index: 1;
+    }
+    .hero-feature {
+      padding-top: 1rem;
+      border-top: 2px solid var(--ink);
+    }
+    .hero-feature h4 {
+      font-family: var(--serif);
+      font-size: 1rem;
+      margin-bottom: 0.3rem;
+    }
+    .hero-feature p { font-size: 0.85rem; }
+
+    @media (max-width: 768px) {
+      .hero-features { grid-template-columns: 1fr; gap: 1.5rem; }
+    }
+
+    /* ── AUTH PAGE ────────────────────────────── */
+    .auth-page {
+      min-height: 88vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .auth-card {
+      background: var(--parchment);
+      border: 1px solid var(--rule);
+      padding: 3rem;
+      max-width: 440px;
+      width: 100%;
+    }
+    .auth-tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 2rem;
+      border-bottom: 2px solid var(--ink);
+    }
+    .auth-tab {
+      flex: 1;
+      padding: 10px;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      text-align: center;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--faded-ink);
+      transition: all 0.2s;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+    }
+    .auth-tab.active { color: var(--ink); border-bottom-color: var(--burnt-orange); }
+    .auth-error {
+      background: var(--red-wash);
+      border-left: 3px solid var(--burnt-orange);
+      padding: 10px 14px;
+      font-size: 0.85rem;
+      color: var(--burnt-orange);
+      margin-bottom: 1rem;
+    }
+
+    /* ── REPO GRID ────────────────────────────── */
+    .repo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1.2rem; }
+    .repo-card {
+      background: var(--parchment);
+      border: 1px solid var(--rule);
+      padding: 1.5rem;
+      position: relative;
+      transition: all 0.2s;
+    }
+    .repo-card:hover { border-color: var(--ink); }
+    .repo-card .repo-name {
+      font-family: var(--mono);
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--deep-blue);
+    }
+    .repo-card .repo-rules {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 0.8rem;
+    }
+    .repo-tag {
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border: 1px solid var(--rule);
+      background: var(--cream);
+      color: var(--faded-ink);
+    }
+    .repo-actions {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      margin-top: 1rem;
+      padding-top: 0.8rem;
+      border-top: 1px solid var(--rule);
+    }
+
+    /* ── EMPTY STATE ──────────────────────────── */
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--faded-ink);
+    }
+    .empty-state .empty-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      opacity: 0.4;
+    }
+    .empty-state h3 { color: var(--faded-ink); margin-bottom: 0.5rem; }
+
+    /* ── TWO-COLUMN LAYOUT ───────────────────── */
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: start; }
+    @media (max-width: 768px) { .split { grid-template-columns: 1fr; } }
+
+    /* ── TYPEWRITER EFFECT ────────────────────── */
+    .typewriter {
+      border-right: 2px solid var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      animation: typing 2.5s steps(30) 0.5s 1 normal both, blink 0.75s step-end infinite;
+    }
+    @keyframes typing { from { width: 0; } to { width: 100%; } }
+    @keyframes blink { from, to { border-color: transparent; } 50% { border-color: var(--ink); } }
+  </style>
+</head>
+<body>
+
+  <!-- TOAST CONTAINER -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- ═══════════ TICKER TAPE ═══════════ -->
+  <div class="ticker-wrap" id="ticker-wrap" style="display:none;">
+    <div class="ticker-content" id="ticker-content"></div>
+  </div>
+
+  <!-- ═══════════ TOP BAR ═══════════ -->
+  <nav class="topbar" id="topbar">
+    <a class="topbar-brand" onclick="navigate('landing')">
+      <span class="brand-mark">CI</span>
+      CodeInspector
+    </a>
+    <div class="topbar-nav" id="topbar-nav"></div>
+  </nav>
+
+  <!-- ═══════════ MAIN CONTENT ═══════════ -->
+  <main id="app"></main>
+
+  <!-- ═══════════ FOOTER ═══════════ -->
+  <footer class="site-footer">
+    <strong>Fzee-Tech</strong> — CodeInspector · AI Code Review Engine<br>
+    <span style="font-size:0.65rem">Powered by Google Gemini · GitHub API · TypeScript · MongoDB</span>
+  </footer>
+
+  <!-- ═══════════ MODALS CONTAINER ═══════════ -->
+  <div id="modal-root"></div>
+
+  <script>
+  // ═══════════════════════════════════════════════════════
+  //  CodeInspector — SPA Application
+  //  "The Code Inspector's Desk"
+  // ═══════════════════════════════════════════════════════
+
+  const API_BASE = window.location.hostname === 'ai-code-review-lilac.vercel.app' ? '/api' : 'https://ai-code-review-lilac.vercel.app/api';
+  const $app = document.getElementById('app');
+  const $nav = document.getElementById('topbar-nav');
+  const $ticker = document.getElementById('ticker-wrap');
+  const $tickerContent = document.getElementById('ticker-content');
+  const $toastContainer = document.getElementById('toast-container');
+  const $modalRoot = document.getElementById('modal-root');
+
+  // ── STATE ─────────────────────────────────────
+  let state = {
+    token: localStorage.getItem('ci_token') || null,
+    user: JSON.parse(localStorage.getItem('ci_user') || 'null'),
+    currentPage: 'landing',
+    reviews: [],
+    repos: [],
+    selectedReview: null
+  };
+
+  // ── TOAST ─────────────────────────────────────
+  function toast(msg, type = 'success') {
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.textContent = msg;
+    $toastContainer.appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 300); }, 3500);
+  }
+
+  // ── API CLIENT ────────────────────────────────
+  async function api(path, opts = {}) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
+    const res = await fetch(`${API_BASE}${path}`, { ...opts, headers: { ...headers, ...opts.headers } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Request failed');
+    return data;
+  }
+
+
+  // ── HELPERS ───────────────────────────────────
+  function dateAgo(d) {
+    const s = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
+    if (s < 60) return `${s}s ago`;
+    if (s < 3600) return `${Math.floor(s/60)}m ago`;
+    if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+    return `${Math.floor(s/86400)}d ago`;
+  }
+  function scoreColor(s) { return s >= 80 ? 'var(--forest)' : s >= 60 ? 'var(--deep-blue)' : s >= 40 ? 'var(--amber)' : 'var(--burnt-orange)'; }
+  function statusStamp(s) { return `<span class="stamp stamp-${s} stamp-press">${s}</span>`; }
+  function severityStamp(s) { return `<span class="stamp stamp-${s} stamp-press">${s}</span>`; }
+  function gaugeRotation(score) { return -90 + (score / 100) * 180; }
+
+  // ── ROUTER ────────────────────────────────────
+  function navigate(page, data) {
+    state.currentPage = page;
+    if (data) state.pageData = data;
+    window.location.hash = page === 'landing' ? '' : page;
+    render();
+  }
+
+  window.addEventListener('hashchange', () => {
+    const hash = window.location.hash.slice(1) || 'landing';
+    if (hash.startsWith('review/')) {
+      state.currentPage = 'reviewDetail';
+      state.pageData = { id: hash.split('/')[1] };
+    } else {
+      state.currentPage = hash;
+    }
+    render();
+  });
+
+  // ── TICKER ────────────────────────────────────
+  function renderTicker() {
+    if (!state.reviews || state.reviews.length === 0) return;
+    const items = state.reviews.slice(0, 5).map(r => {
+      const color = r.overallScore >= 80 ? 'green' : r.overallScore >= 50 ? 'orange' : 'blue';
+      return `<span><span class="ticker-dot ${color}"></span>REVIEW ${r.repository?.githubRepoFullName || 'repo'} #${r.pullNumber} → ${r.overallScore}/100 · ${dateAgo(r.createdAt)}</span>`;
+    });
+    const doubled = items.concat(items).join('');
+    $tickerContent.innerHTML = doubled;
+  }
+
+  // ── NAV RENDER ────────────────────────────────
+  function renderNav() {
+    if (state.token) {
+      $ticker.style.display = 'block';
+      renderTicker();
+      $nav.innerHTML = `
+        <a href="#dashboard" class="${state.currentPage === 'dashboard' ? 'active' : ''}" id="nav-dashboard">Dashboard</a>
+        <a href="#repos" class="${state.currentPage === 'repos' ? 'active' : ''}" id="nav-repos">Repos</a>
+        <a href="#" onclick="logout(); return false;" id="nav-logout">Logout</a>
+      `;
+    } else {
+      $ticker.style.display = 'none';
+      $nav.innerHTML = `
+        <a href="#auth" class="${state.currentPage === 'auth' ? 'active' : ''}" id="nav-login">Sign In</a>
+      `;
+    }
+  }
+
+  // ── LOGOUT ────────────────────────────────────
+  function logout() {
+    state.token = null;
+    state.user = null;
+    localStorage.removeItem('ci_token');
+    localStorage.removeItem('ci_user');
+    toast('Signed out');
+    navigate('landing');
+  }
+
+  // ── MAIN RENDER ───────────────────────────────
+  function render() {
+    renderNav();
+    const p = state.currentPage;
+    if (p === 'landing') renderLanding();
+    else if (p === 'auth') renderAuth();
+    else if (p === 'dashboard') { if (!state.token) { navigate('auth'); return; } renderDashboard(); }
+    else if (p === 'repos') { if (!state.token) { navigate('auth'); return; } renderRepos(); }
+    else if (p === 'reviewDetail') { if (!state.token) { navigate('auth'); return; } renderReviewDetail(); }
+    else renderLanding();
+  }
+
+  // ═══════════════════════════════════════════════
+  //  PAGE: LANDING
+  // ═══════════════════════════════════════════════
+  function renderLanding() {
+    $app.innerHTML = `
+    <div class="page">
+      <div class="hero container">
+        <div class="hero-overline">Event-Driven Code Intelligence</div>
+        <h1>Your code<br>deserves an <em>Inspector.</em></h1>
+        <p class="hero-desc">
+          A webhook fires. Your API catches the pull request. Gemini dissects every diff for bugs, security holes, and style violations. Structured review comments land on the PR — automatically, ruthlessly, precisely.
+        </p>
+        <div class="hero-actions">
+          <button class="btn" onclick="navigate('${state.token ? 'dashboard' : 'auth'}')" id="hero-cta">
+            ${state.token ? 'Open Dashboard' : 'Start Inspecting'} →
+          </button>
+          <button class="btn btn-outline" onclick="document.getElementById('how-section').scrollIntoView({behavior:'smooth'})" id="hero-learn">
+            How It Works
+          </button>
+        </div>
+        <div class="hero-features">
+          <div class="hero-feature">
+            <h4>Webhook-Driven</h4>
+            <p>GitHub POSTs to your API when PRs open. No polling, no cron jobs — pure event-driven architecture.</p>
+          </div>
+          <div class="hero-feature">
+            <h4>HMAC Verified</h4>
+            <p>Every webhook is cryptographically verified. SHA-256 signatures ensure only GitHub can trigger reviews.</p>
+          </div>
+          <div class="hero-feature">
+            <h4>AI-Reviewed</h4>
+            <p>Gemini 2.5 Flash analyzes diffs for security, performance, bugs, and style — then posts inline comments.</p>
+          </div>
+        </div>
+      </div>
+
+      <hr class="rule">
+
+      <section class="container" id="how-section" style="padding: 5rem 2rem;">
+        <span class="section-label">The Pipeline</span>
+        <h2 class="mb-3">Six steps. Zero human intervention.</h2>
+        <div class="split">
+          <div>
+            ${renderFlowSteps()}
+          </div>
+          <div>
+            <div class="code-pane">
+              <div class="code-header">
+                <span class="filename">webhook.service.ts</span>
+                <span class="filemeta">Fire & Forget Pattern</span>
+              </div>
+              <div style="padding: 14px;">
+                <div class="code-line"><span class="code-linenum">113</span><span style="color:#888">// Respond to GitHub IMMEDIATELY</span></div>
+                <div class="code-line"><span class="code-linenum">114</span><span style="color:#888">// Review runs in the background</span></div>
+                <div class="code-line"><span class="code-linenum">115</span><span style="color:#c792ea">const</span> result = { action: <span style="color:#c3e88d">"review_triggered"</span> };</div>
+                <div class="code-line"><span class="code-linenum">116</span></div>
+                <div class="code-line added"><span class="code-linenum">117</span><span style="color:#82aaff">reviewPR</span>(payload).<span style="color:#82aaff">catch</span>(err =></div>
+                <div class="code-line added"><span class="code-linenum">118</span>  console.<span style="color:#82aaff">error</span>(err)</div>
+                <div class="code-line added"><span class="code-linenum">119</span>);</div>
+                <div class="code-line"><span class="code-linenum">120</span></div>
+                <div class="code-line"><span class="code-linenum">121</span>res.<span style="color:#82aaff">json</span>(result); <span style="color:#888">// &lt;10s response</span></div>
+              </div>
+            </div>
+            <p class="mt-2" style="font-size:0.85rem;">
+              GitHub times out after 10 seconds. The AI review takes 15–30 seconds.
+              Solution: <strong>fire-and-forget</strong> — respond instantly, review asynchronously.
+              This is the same pattern used by Stripe, Twilio, and Slack webhooks in production.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <hr class="rule">
+
+      <section class="container" style="padding: 5rem 2rem;">
+        <span class="section-label">API Surface</span>
+        <h2 class="mb-3">Nine endpoints. Two auth strategies.</h2>
+        <div style="overflow-x: auto;">
+          <table class="ledger">
+            <thead><tr><th>Method</th><th>Endpoint</th><th>Auth</th><th>Purpose</th></tr></thead>
+            <tbody>
+              <tr><td><span class="stamp stamp-praise" style="transform:none;font-size:.6rem;">POST</span></td><td class="mono" style="font-size:.82rem;">/api/auth/register</td><td>—</td><td>Create account</td></tr>
+              <tr><td><span class="stamp stamp-praise" style="transform:none;font-size:.6rem;">POST</span></td><td class="mono" style="font-size:.82rem;">/api/auth/login</td><td>—</td><td>Login → JWT</td></tr>
+              <tr><td><span class="stamp stamp-critical" style="transform:none;font-size:.6rem;">POST</span></td><td class="mono" style="font-size:.82rem;">/api/webhooks/github</td><td><span class="stamp stamp-warning" style="transform:none;font-size:.55rem;">HMAC</span></td><td>GitHub webhook endpoint</td></tr>
+              <tr><td><span class="stamp stamp-praise" style="transform:none;font-size:.6rem;">POST</span></td><td class="mono" style="font-size:.82rem;">/api/webhooks/repos</td><td><span class="stamp stamp-suggestion" style="transform:none;font-size:.55rem;">JWT</span></td><td>Register repo</td></tr>
+              <tr><td><span class="stamp stamp-warning" style="transform:none;font-size:.6rem;">GET</span></td><td class="mono" style="font-size:.82rem;">/api/webhooks/repos</td><td><span class="stamp stamp-suggestion" style="transform:none;font-size:.55rem;">JWT</span></td><td>List registered repos</td></tr>
+              <tr><td><span class="stamp stamp-suggestion" style="transform:none;font-size:.6rem;">PATCH</span></td><td class="mono" style="font-size:.82rem;">/api/webhooks/repos/:id</td><td><span class="stamp stamp-suggestion" style="transform:none;font-size:.55rem;">JWT</span></td><td>Update repo rules</td></tr>
+              <tr><td><span class="stamp stamp-critical" style="transform:none;font-size:.6rem;">DEL</span></td><td class="mono" style="font-size:.82rem;">/api/webhooks/repos/:id</td><td><span class="stamp stamp-suggestion" style="transform:none;font-size:.55rem;">JWT</span></td><td>Delete repo</td></tr>
+              <tr><td><span class="stamp stamp-warning" style="transform:none;font-size:.6rem;">GET</span></td><td class="mono" style="font-size:.82rem;">/api/reviews</td><td><span class="stamp stamp-suggestion" style="transform:none;font-size:.55rem;">JWT</span></td><td>List all reviews</td></tr>
+              <tr><td><span class="stamp stamp-warning" style="transform:none;font-size:.6rem;">GET</span></td><td class="mono" style="font-size:.82rem;">/api/reviews/:id</td><td><span class="stamp stamp-suggestion" style="transform:none;font-size:.55rem;">JWT</span></td><td>Full review details</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>`;
+  }
+
+  function renderFlowSteps() {
+    const steps = [
+      { n: '01', title: 'Developer opens a PR', desc: 'A push to a branch triggers the pull request event on GitHub.', color: 'var(--deep-blue)' },
+      { n: '02', title: 'GitHub POSTs webhook', desc: 'GitHub sends an HMAC-signed payload to /api/webhooks/github.', color: 'var(--forest)' },
+      { n: '03', title: 'Signature verified', desc: 'HMAC-SHA256 verification ensures the request is legitimate.', color: 'var(--burnt-orange)' },
+      { n: '04', title: 'Diff fetched from GitHub', desc: 'Your API calls GitHub\'s REST API to get the unified diff.', color: 'var(--deep-blue)' },
+      { n: '05', title: 'Gemini analyzes the code', desc: 'The diff is sent to Gemini 2.5 Flash with review rules and strictness level.', color: 'var(--amber)' },
+      { n: '06', title: 'Comments posted on PR', desc: 'Structured review with severity stamps and inline suggestions lands on the PR.', color: 'var(--forest)' },
+    ];
+    return steps.map((s, i) => `
+      <div style="display:flex;gap:14px;padding:0.8rem 0;${i < steps.length - 1 ? 'border-bottom:1px dashed var(--rule);' : ''}">
+        <div style="font-family:var(--mono);font-size:0.7rem;font-weight:700;color:${s.color};min-width:28px;padding-top:3px;">${s.n}</div>
+        <div>
+          <div style="font-weight:600;font-size:0.95rem;margin-bottom:2px;">${s.title}</div>
+          <div style="color:var(--faded-ink);font-size:0.82rem;">${s.desc}</div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // ═══════════════════════════════════════════════
+  //  PAGE: AUTH
+  // ═══════════════════════════════════════════════
+  function renderAuth() {
+    const tab = state.authTab || 'login';
+    $app.innerHTML = `
+    <div class="page auth-page">
+      <div class="auth-card">
+        <h2 class="text-center mb-3">The Inspector's<br>Logbook</h2>
+        <div class="auth-tabs">
+          <button class="auth-tab ${tab === 'login' ? 'active' : ''}" onclick="state.authTab='login';renderAuth();" id="tab-login">Sign In</button>
+          <button class="auth-tab ${tab === 'register' ? 'active' : ''}" onclick="state.authTab='register';renderAuth();" id="tab-register">Register</button>
+        </div>
+        <div id="auth-error"></div>
+        ${tab === 'login' ? `
+          <form onsubmit="handleLogin(event)" id="login-form">
+            <div class="form-group">
+              <label for="login-email">Email Address</label>
+              <input class="form-input" type="email" id="login-email" placeholder="inspector@codereview.dev" required>
+            </div>
+            <div class="form-group">
+              <label for="login-password">Passphrase</label>
+              <input class="form-input" type="password" id="login-password" placeholder="••••••••" required>
+            </div>
+            <button class="btn" type="submit" style="width:100%;justify-content:center;" id="login-submit">Enter the Office →</button>
+          </form>
+        ` : `
+          <form onsubmit="handleRegister(event)" id="register-form">
+            <div class="form-group">
+              <label for="reg-name">Inspector Name</label>
+              <input class="form-input" type="text" id="reg-name" placeholder="John Doe" required>
+            </div>
+            <div class="form-group">
+              <label for="reg-email">Email Address</label>
+              <input class="form-input" type="email" id="reg-email" placeholder="inspector@codereview.dev" required>
+            </div>
+            <div class="form-group">
+              <label for="reg-password">Passphrase</label>
+              <input class="form-input" type="password" id="reg-password" placeholder="Min 6 characters" required minlength="6">
+            </div>
+            <button class="btn" type="submit" style="width:100%;justify-content:center;" id="register-submit">Issue Credentials →</button>
+          </form>
+        `}
+
+      </div>
+    </div>`;
+  }
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+    const errEl = document.getElementById('auth-error');
+    try {
+      const res = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+      if (res && res.success) {
+        state.token = res.data.token;
+        state.user = res.data.user;
+        localStorage.setItem('ci_token', state.token);
+        localStorage.setItem('ci_user', JSON.stringify(state.user));
+        toast('Welcome back, Inspector');
+        navigate('dashboard');
+      } else {
+        errEl.innerHTML = `<div class="auth-error">${res?.message || 'Login failed'}</div>`;
+      }
+    } catch (err) {
+      errEl.innerHTML = `<div class="auth-error">${err.message}</div>`;
+    }
+  }
+
+  async function handleRegister(e) {
+    e.preventDefault();
+    const name = document.getElementById('reg-name').value;
+    const email = document.getElementById('reg-email').value;
+    const password = document.getElementById('reg-password').value;
+    const errEl = document.getElementById('auth-error');
+    try {
+      const res = await api('/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password }) });
+      if (res && res.success) {
+        state.token = res.data.token;
+        state.user = res.data.user;
+        localStorage.setItem('ci_token', state.token);
+        localStorage.setItem('ci_user', JSON.stringify(state.user));
+        toast('Credentials issued. Welcome aboard.');
+        navigate('dashboard');
+      } else {
+        errEl.innerHTML = `<div class="auth-error">${res?.message || 'Registration failed'}</div>`;
+      }
+    } catch (err) {
+      errEl.innerHTML = `<div class="auth-error">${err.message}</div>`;
+    }
+  }
+
+  // ═══════════════════════════════════════════════
+  //  PAGE: DASHBOARD
+  // ═══════════════════════════════════════════════
+  async function renderDashboard() {
+    let reviews = [];
+    try {
+      const res = await api('/reviews');
+      if (res && res.success) reviews = res.data;
+    } catch(e) {}
+    state.reviews = reviews;
+
+    const completed = reviews.filter(r => r.status === 'completed');
+    const avgScore = completed.length ? Math.round(completed.reduce((a, r) => a + r.overallScore, 0) / completed.length) : 0;
+    const criticalCount = 0;
+    const reviewing = reviews.filter(r => r.status === 'reviewing').length;
+
+    $app.innerHTML = `
+    <div class="page">
+      <div class="container" style="padding: 3rem 2rem;">
+        <span class="section-label">Dashboard</span>
+        <h2>Inspector's Log</h2>
+        <p class="mb-3">Welcome back${state.user?.name ? ', ' + state.user.name : ''}. Here's your review activity.</p>
+
+        <div class="stats-grid mb-3">
+          <div class="stat-block blue">
+            <div class="stat-number">${reviews.length}</div>
+            <div class="stat-label">Total Reviews</div>
+          </div>
+          <div class="stat-block green">
+            <div class="stat-number">${avgScore}</div>
+            <div class="stat-label">Avg Score</div>
+          </div>
+          <div class="stat-block orange">
+            <div class="stat-number">${criticalCount}</div>
+            <div class="stat-label">Critical Issues</div>
+          </div>
+          <div class="stat-block amber">
+            <div class="stat-number">${reviewing}</div>
+            <div class="stat-label">In Progress</div>
+          </div>
+        </div>
+
+        <div class="split" style="grid-template-columns: 1fr 260px; gap: 2rem;">
+          <div>
+            <hr class="rule-thick">
+            <h3 class="mb-2">Recent Reviews</h3>
+            ${reviews.length === 0 ? `
+              <div class="empty-state"><div class="empty-icon">📋</div><h3>No reviews yet</h3><p>Register a repo and open a PR to get started.</p></div>
+            ` : `
+              <table class="ledger">
+                <thead><tr><th>PR</th><th>Repo</th><th>Score</th><th>Status</th><th>When</th></tr></thead>
+                <tbody>
+                  ${reviews.map(r => `
+                    <tr onclick="navigate('reviewDetail', { id: '${r._id}' }); window.location.hash='review/${r._id}';" id="review-row-${r._id}">
+                      <td>
+                        <div style="font-weight:600;font-size:0.88rem;">${escHtml(r.prTitle)}</div>
+                        <div class="mono text-faded" style="font-size:0.72rem;">#${r.pullNumber} by ${r.prAuthor}</div>
+                      </td>
+                      <td class="mono" style="font-size:0.78rem;">${r.repository?.githubRepoFullName || '—'}</td>
+                      <td class="score-cell" style="color:${scoreColor(r.overallScore)}">${r.status === 'completed' ? r.overallScore : '—'}</td>
+                      <td>${statusStamp(r.status)}</td>
+                      <td class="date-cell">${dateAgo(r.createdAt)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            `}
+          </div>
+          <div>
+            <hr class="rule-thick">
+            <h3 class="mb-2 text-center">Quality Gauge</h3>
+            <div class="gauge-wrap">
+              <div class="gauge-bg">
+                <div class="gauge-fill"></div>
+                <div class="gauge-needle" id="gauge-needle"></div>
+                <div class="gauge-center"></div>
+              </div>
+              <div class="gauge-value" style="color:${scoreColor(avgScore)}">${avgScore}</div>
+              <div class="gauge-label">Average Score</div>
+            </div>
+            <div class="mt-3" style="text-align:center;">
+              <button class="btn btn-sm btn-outline" onclick="navigate('repos')" id="dash-manage-repos">Manage Repos →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+    // Animate gauge needle
+    setTimeout(() => {
+      const needle = document.getElementById('gauge-needle');
+      if (needle) needle.style.transform = `translateX(-50%) rotate(${gaugeRotation(avgScore)}deg)`;
+    }, 200);
+  }
+
+  // ═══════════════════════════════════════════════
+  //  PAGE: REPOSITORIES
+  // ═══════════════════════════════════════════════
+  async function renderRepos() {
+    let repos = [];
+    try {
+      const res = await api('/webhooks/repos');
+      if (res && res.success) repos = res.data;
+    } catch(e) {}
+    state.repos = repos;
+
+    $app.innerHTML = `
+    <div class="page">
+      <div class="container" style="padding: 3rem 2rem;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;">
+          <div>
+            <span class="section-label">Repositories</span>
+            <h2>Registered Repos</h2>
+            <p>Repositories connected to the CodeInspector webhook pipeline.</p>
+          </div>
+          <button class="btn btn-sm" onclick="showAddRepoModal()" id="add-repo-btn">+ Add Repo</button>
+        </div>
+
+        <hr class="rule-thick">
+
+        ${repos.length === 0 ? `
+          <div class="empty-state"><div class="empty-icon">📁</div><h3>No repositories</h3><p>Add a GitHub repo to start automated code reviews.</p></div>
+        ` : `
+          <div class="repo-grid">
+            ${repos.map(r => `
+              <div class="repo-card" id="repo-card-${r._id}">
+                <div class="card-header" style="border:none;padding:0;margin-bottom:0.6rem;">
+                  <div class="repo-name">${r.githubRepoFullName}</div>
+                  <label class="toggle">
+                    <input type="checkbox" ${r.webhookActive ? 'checked' : ''} onchange="toggleWebhook('${r._id}', this.checked)">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <div style="font-size:0.78rem;color:var(--faded-ink);margin-bottom:0.5rem;">
+                  ${r.webhookActive ? '<span class="stamp stamp-completed stamp-press">active</span>' : '<span class="stamp stamp-pending stamp-press">paused</span>'}
+                  <span class="mono" style="font-size:0.68rem;margin-left:6px;">${r.reviewRules?.strictness || 'standard'} mode</span>
+                </div>
+                <div class="repo-rules">
+                  ${(r.reviewRules?.focusAreas || []).map(a => `<span class="repo-tag">${a}</span>`).join('')}
+                </div>
+                <div class="repo-actions">
+                  <button class="btn btn-sm btn-outline" onclick="showRepoSetup('${r.githubRepoFullName}')" id="setup-${r._id}">Setup Guide</button>
+                  <button class="btn btn-sm btn-danger" onclick="deleteRepo('${r._id}')" id="delete-${r._id}">Delete</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `}
+      </div>
+    </div>`;
+  }
+
+  function showAddRepoModal() {
+    $modalRoot.innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box">
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+        <h3 class="mb-2">Register Repository</h3>
+        <p class="mb-3" style="font-size:0.85rem;">Enter the full GitHub repo name in <span class="mono">owner/repo</span> format.</p>
+        <form onsubmit="handleAddRepo(event)" id="add-repo-form">
+          <div class="form-group">
+            <label for="repo-name-input">Repository</label>
+            <input class="form-input" type="text" id="repo-name-input" placeholder="fzee07/my-project" required pattern=".+/.+">
+          </div>
+          <button class="btn" type="submit" style="width:100%;justify-content:center;" id="add-repo-submit">Register →</button>
+        </form>
+      </div>
+    </div>`;
+  }
+
+  function showRepoSetup(repoName) {
+    $modalRoot.innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box" style="max-width:560px;">
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+        <h3 class="mb-2">Webhook Setup Guide</h3>
+        <div style="font-family:var(--mono);font-size:0.82rem;line-height:2;">
+          <div><span class="stamp stamp-praise" style="transform:none;font-size:0.55rem;margin-right:6px;">01</span> Go to <strong>github.com/${repoName}/settings/hooks</strong></div>
+          <div><span class="stamp stamp-praise" style="transform:none;font-size:0.55rem;margin-right:6px;">02</span> Click <strong>"Add webhook"</strong></div>
+          <div><span class="stamp stamp-praise" style="transform:none;font-size:0.55rem;margin-right:6px;">03</span> Payload URL: <span style="color:var(--deep-blue);">https://YOUR_DOMAIN/api/webhooks/github</span></div>
+          <div><span class="stamp stamp-praise" style="transform:none;font-size:0.55rem;margin-right:6px;">04</span> Content type: <strong>application/json</strong></div>
+          <div><span class="stamp stamp-warning" style="transform:none;font-size:0.55rem;margin-right:6px;">05</span> Secret: <strong>Same as GITHUB_WEBHOOK_SECRET env var</strong></div>
+          <div><span class="stamp stamp-praise" style="transform:none;font-size:0.55rem;margin-right:6px;">06</span> Events: Select <strong>"Pull requests"</strong></div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function closeModal() { $modalRoot.innerHTML = ''; }
+
+  async function handleAddRepo(e) {
+    e.preventDefault();
+    const name = document.getElementById('repo-name-input').value;
+    try {
+      const res = await api('/webhooks/repos', { method: 'POST', body: JSON.stringify({ githubRepoFullName: name }) });
+      if (res && res.success) { toast('Repository registered'); closeModal(); renderRepos(); }
+    } catch(err) { toast(err.message, 'error'); }
+  }
+
+  async function toggleWebhook(id, active) {
+    try {
+      await api(`/webhooks/repos/${id}`, { method: 'PATCH', body: JSON.stringify({ webhookActive: active }) });
+      toast(active ? 'Webhook activated' : 'Webhook paused');
+    } catch(e) {
+      toast('Failed to update webhook', 'error');
+    }
+  }
+
+  async function deleteRepo(id) {
+    if (!confirm('Delete this repository?')) return;
+    try { await api(`/webhooks/repos/${id}`, { method: 'DELETE' }); } catch(e) {
+      toast('Failed to delete repository', 'error');
+      return;
+    }
+    toast('Repository removed');
+    renderRepos();
+  }
+
+  // ═══════════════════════════════════════════════
+  //  PAGE: REVIEW DETAIL
+  // ═══════════════════════════════════════════════
+  async function renderReviewDetail() {
+    const id = state.pageData?.id;
+    if (!id) return;
+    
+    let review = null;
+    try {
+      const res = await api(`/reviews/${id}`);
+      if (res && res.success) review = res.data;
+    } catch(e) {}
+
+    if (!review) {
+      $app.innerHTML = `<div class="page"><div class="container" style="padding:4rem 2rem;"><p>Review not found.</p><button class="btn btn-outline mt-2" onclick="navigate('dashboard')">Back</button></div></div>`;
+      return;
+    }
+
+    const comments = review.comments || [];
+    const criticals = comments.filter(c => c.severity === 'critical').length;
+    const warnings = comments.filter(c => c.severity === 'warning').length;
+    const suggestions = comments.filter(c => c.severity === 'suggestion').length;
+    const praises = comments.filter(c => c.severity === 'praise').length;
+
+    $app.innerHTML = `
+    <div class="page">
+      <div class="container" style="padding: 3rem 2rem;">
+        <a href="#dashboard" style="font-family:var(--mono);font-size:0.72rem;letter-spacing:2px;text-transform:uppercase;color:var(--faded-ink);" id="back-to-dash">← Back to Dashboard</a>
+
+        <div class="split mt-3" style="grid-template-columns: 1fr 240px;">
+          <div>
+            <span class="section-label">${review.repository?.githubRepoFullName || ''} #${review.pullNumber}</span>
+            <h2>${escHtml(review.prTitle)}</h2>
+            <p class="mt-1 mb-2" style="font-size:0.88rem;">
+              ${review.headBranch} → ${review.baseBranch} · by <strong>${review.prAuthor}</strong> · ${review.filesChanged} files · <span style="color:var(--forest)">+${review.additions}</span> <span style="color:var(--burnt-orange)">−${review.deletions}</span>
+            </p>
+            <div class="card mb-2" style="background:var(--cream);">
+              <h4 style="font-family:var(--serif);margin-bottom:0.5rem;">Inspector's Summary</h4>
+              <p style="color:var(--ink);max-width:none;">${escHtml(review.summary)}</p>
+            </div>
+          </div>
+          <div>
+            <div class="gauge-wrap">
+              <div class="gauge-bg">
+                <div class="gauge-fill"></div>
+                <div class="gauge-needle" id="detail-gauge-needle"></div>
+                <div class="gauge-center"></div>
+              </div>
+              <div class="gauge-value" style="color:${scoreColor(review.overallScore)}">${review.overallScore}</div>
+              <div class="gauge-label">Overall Score</div>
+            </div>
+            <div class="mt-2 text-center">
+              ${statusStamp(review.status)}
+            </div>
+            <div class="mt-3" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;">
+              ${criticals ? `<span class="stamp stamp-critical stamp-press" style="font-size:.58rem;">${criticals} Critical</span>` : ''}
+              ${warnings ? `<span class="stamp stamp-warning stamp-press" style="font-size:.58rem;">${warnings} Warning</span>` : ''}
+              ${suggestions ? `<span class="stamp stamp-suggestion stamp-press" style="font-size:.58rem;">${suggestions} Suggestion</span>` : ''}
+              ${praises ? `<span class="stamp stamp-praise stamp-press" style="font-size:.58rem;">${praises} Praise</span>` : ''}
+            </div>
+          </div>
+        </div>
+
+        <hr class="rule-thick">
+        <h3 class="mb-2">Review Comments</h3>
+
+        ${comments.map(c => `
+          <div class="review-comment severity-${c.severity}">
+            <div class="rc-header">
+              ${severityStamp(c.severity)}
+              <span class="rc-file">${c.file}</span>
+              <span class="rc-line">:${c.line}</span>
+              <span class="repo-tag">${c.category}</span>
+            </div>
+            <div class="rc-message">${escHtml(c.message)}</div>
+            ${c.suggestion ? `<div class="rc-suggestion">${escHtml(c.suggestion)}</div>` : ''}
+          </div>
+        `).join('')}
+      </div>
+    </div>`;
+
+    setTimeout(() => {
+      const needle = document.getElementById('detail-gauge-needle');
+      if (needle) needle.style.transform = `translateX(-50%) rotate(${gaugeRotation(review.overallScore)}deg)`;
+    }, 200);
+  }
+
+  // ── HTML ESCAPE ───────────────────────────────
+  function escHtml(s) {
+    if (!s) return '';
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  // ── INIT ──────────────────────────────────────
+  (function init() {
+    const hash = window.location.hash.slice(1) || 'landing';
+    if (hash.startsWith('review/')) {
+      state.currentPage = 'reviewDetail';
+      state.pageData = { id: hash.split('/')[1] };
+    } else {
+      state.currentPage = hash;
+    }
+    render();
+  })();
+  </script>
+
+</body>
+</html>

@@ -3,7 +3,6 @@ dotenv.config();
 
 import express from "express";
 import cors from "cors";
-import path from "path";
 import connectDB from "./config/db";
 import authRoutes from "./modules/auth/auth.routes";
 import webhookRoutes from "./modules/webhook/webhook.routes";
@@ -14,7 +13,6 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
-app.use("/frontend", express.static(path.join(__dirname, "../frontend")));
 
 app.use("/api", async (_req, res, next) => {
   try {
